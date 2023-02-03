@@ -1,31 +1,49 @@
 const electron = require('electron')
 const path = require('path')
+const nativeImage = require('electron').nativeImage
 
 const BrowserWindow = electron.BrowserWindow
 const app = electron.app
+const isWin = process.platform === "win32"
 
 app.on('ready', () => {
   createWindow()
 })
+var phpServer = require('php-server-manager');
+const PHPServer = require('php-server-manager');
 
-var phpServer = require('node-php-server');
 const port = 8000, host = '127.0.0.1';
 const serverUrl = `http://${host}:${port}`;
-
+const image = nativeImage.createFromPath('/icone.png');
 
 let mainWindow
-
+let server
 function createWindow() {
-  // Create a PHP Server
-  phpServer.createServer({
+  image.setTemplateImage(true);
+
+  if (isWin) {
+
+     server = new PHPServer({
+      php: `${__dirname}/php/php.exe`,
+      stdio: 'inherit',
+      port: port,
+      directory: `${__dirname}/www/public/`,
+      directives: {
+      display_errors: 1,
+      expose_php: 1
+      },
+      config: `${__dirname}/php/php.ini`,
+      script: `${__dirname}/www/server.php`,
+      });
+}else{
+   server = new PHPServer({
     port: port,
-    hostname: host,
-    base: `${__dirname}/www/public`,
-    keepalive: false,
-    open: false,
-    bin: `${__dirname}/php/php.exe`,
-    router: __dirname + '/www/server.php'
+    directory: `${__dirname}/www/public/`,
+    script: `${__dirname}`+ '/www/server.php'
   });
+}
+
+server.run();
 
   // Create the browser window.
   const {
@@ -33,17 +51,37 @@ function createWindow() {
     height
   } = electron.screen.getPrimaryDisplay().workAreaSize
   mainWindow = new BrowserWindow({
+    icon: path.join(__dirname , 'icon.ico'),
     width: width,
     height: height,
     show: false,
-    autoHideMenuBar: true
+    autoHideMenuBar: true,
+    
+
   })
+  
 
   mainWindow.loadURL(serverUrl)
+  
+  var splash = new BrowserWindow({ 
+    width: 500, 
+    height: 500, 
+    transparent: true, 
+    frame: false, 
+    alwaysOnTop: true 
+  });
+  splash.loadFile('splash.html');
+  splash.center();
 
+  
   mainWindow.webContents.once('dom-ready', function () {
-    mainWindow.show()
+    
+    setTimeout(function () {
+      splash.close();
+      mainWindow.show()
     mainWindow.maximize();
+    }, 6000);
+    
     // mainWindow.webContents.openDevTools()
   });
 
@@ -51,7 +89,7 @@ function createWindow() {
 
   // Emitted when the window is closed.
   mainWindow.on('closed', function () {
-    phpServer.close();
+    server.close();
     mainWindow = null;
   })
 }
@@ -67,7 +105,7 @@ app.on('window-all-closed', function () {
   // to stay active until the user quits explicitly with Cmd + Q
   if (process.platform !== 'darwin') {
     // PHP SERVER QUIT
-    phpServer.close();
+    server.close();
     app.quit();
   }
 })
